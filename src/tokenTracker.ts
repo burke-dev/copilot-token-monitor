@@ -184,7 +184,7 @@ export class TokenTracker {
   /**
    * Check if current usage patterns suggest we might hit rate limits
    */
-  private checkForRateLimit(): void {
+  public checkForRateLimit(): void {
     const metrics = this.getMetrics();
 
     // If we're in high usage territory and haven't warned recently

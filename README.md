@@ -53,13 +53,50 @@ Access these commands via the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`):
 
 ## How It Works
 
-The extension monitors token usage through VS Code's telemetry API and maintains a rolling 2-hour window of usage data. The algorithm:
+The extension estimates token usage by intelligently monitoring your coding activity:
 
-1. **Records** each token usage event with timestamp
-2. **Cleans** entries older than 2 hours automatically
+### Token Estimation Methods
+
+1. **AI-Generated Content Detection**
+   - Monitors text document changes for patterns that indicate AI-generated code
+   - Detects large insertions, multi-line completions, and streaming responses
+   - Analyzes change frequency to identify Copilot activity vs manual typing
+
+2. **Context-Aware Token Counting**
+   - Estimates input tokens (prompt + surrounding code context)
+   - Calculates output tokens based on generated content
+   - Adjusts for different file types and languages
+
+3. **Smart Confidence Scoring**
+   - High confidence: Large multi-line insertions, clear AI patterns
+   - Medium confidence: Rapid successive changes, moderate insertions
+   - Low confidence: Small changes (ignored to avoid false positives)
+
+4. **Language-Specific Adjustments**
+   - Code languages: ~4 characters per token
+   - Natural language: ~5 characters per token
+   - Structured formats (JSON/XML): ~3.5 characters per token
+
+### Data Management
+
+The extension maintains a rolling 2-hour window of usage data:
+
+1. **Records** each estimated token usage event with timestamp and type
+2. **Cleans** entries older than 2 hours automatically (every 5 minutes)
 3. **Calculates** usage metrics (total, average, rate)
 4. **Updates** the visual indicator every 10 seconds
 5. **Persists** data to VS Code's global state for cross-session tracking
+
+### Accuracy & Limitations
+
+**Important Note:** This extension provides *estimates* based on observable activity in VS Code. It cannot access Copilot's actual token usage data.
+
+- ✅ **Good for:** Relative usage tracking, pattern detection, avoiding rate limits
+- ⚠️ **Estimates may vary:** Actual tokens may differ by ±30%
+- 🔍 **Manual typing filtered:** Small changes are ignored to reduce false positives
+- 📊 **Best used for trends:** Track your usage patterns over time
+
+The estimations are conservative and designed to help you stay under rate limits, not to provide exact billing information.
 
 ## Usage Level Calculation
 

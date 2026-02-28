@@ -2,10 +2,12 @@ import * as vscode from "vscode";
 import { TokenTracker } from "./tokenTracker";
 import { StatusBarManager } from "./statusBarManager";
 import { Logger } from "./logger";
+import { TokenEstimator } from "./tokenEstimator";
 
 let tokenTracker: TokenTracker;
 let statusBarManager: StatusBarManager;
 let logger: Logger;
+let tokenEstimator: TokenEstimator;
 
 export function activate(context: vscode.ExtensionContext) {
   console.log("Copilot Token Monitor is now active!");
@@ -14,6 +16,9 @@ export function activate(context: vscode.ExtensionContext) {
   logger = new Logger();
   context.subscriptions.push(logger);
   logger.info("Extension activated");
+
+  // Initialize token estimator
+  tokenEstimator = new TokenEstimator(logger);
 
   // Initialize token tracker
   tokenTracker = new TokenTracker(context, logger);
@@ -106,35 +111,67 @@ ${getUsageTip(metrics.status)}
     },
   );
 
-  // Listen to Copilot chat events if available
-  // Note: The Copilot API is still evolving, so we use telemetry as a fallback
-  try {
-    const logger = vscode.env.createTelemetryLogger({
-      sendEventData(eventName, data) {
-        // Intercept telemetry to estimate token usage
-        if (eventName.includes("chat") || eventName.includes("copilot")) {
-          // Rough estimation: average chat request ~500 tokens
-          tokenTracker.recordUsage(500, eventName);
-          statusBarManager.update();
-        }
-      },
-      sendErrorData(error, data) {
-        // Check if this is a rate limit error
-        const errorStr = error?.toString().toLowerCase() || "";
-        if (
-          errorStr.includes("rate limit") ||
-          errorStr.includes("429") ||
-          errorStr.includes("too many requests")
-        ) {
-          tokenTracker.recordRateLimitHit({ error: error?.toString(), data });
-        }
-      },
-    });
+  // Monitor text document changes to detect AI-generated content
+  const documentChangeListener = vscode.workspace.onDidChangeTextDocument(
+    async (event) => {
+      const estimation = tokenEstimator.estimateFromTextChange(event);
 
-    context.subscriptions.push(logger);
-  } catch (error) {
-    console.log("Telemetry logger not available:", error);
-  }
+      if (estimation && estimation.confidence !== "low") {
+        await tokenTracker.recordUsage(
+          estimation.tokens,
+          `${estimation.type}:${event.document.languageId}`,
+        );
+        statusBarManager.update();
+
+        // Log high-confidence detections
+        if (estimation.confidence === "high") {
+          logger.info("AI-generated content detected", {
+            type: estimation.type,
+            tokens: estimation.tokens,
+            language: event.document.languageId,
+            file: event.document.fileName,
+          });
+        }
+      }
+    },
+  );
+
+  // Monitor chat panel commands
+  const chatCommandListener = vscode.commands.registerCommand(
+    "workbench.action.chat.open",
+    async () => {
+      // User opened chat - estimate baseline tokens
+      await tokenTracker.recordUsage(100, "chat:opened");
+      statusBarManager.update();
+      logger.info("Copilot chat opened");
+    },
+  );
+
+  // Monitor inline chat (Cmd+I)
+  const inlineChatListener = vscode.commands.registerCommand(
+    "inlineChat.start",
+    async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (editor) {
+        const selection = editor.selection;
+        const selectionLength = editor.document.getText(selection).length;
+        // Estimate tokens for inline chat interaction
+        const tokens = tokenEstimator.estimateInlineChatTokens(
+          "",
+          selectionLength,
+        );
+        await tokenTracker.recordUsage(tokens, "inline-chat");
+        statusBarManager.update();
+        logger.info("Inline chat started", { selectionLength, tokens });
+      }
+    },
+  );
+
+  context.subscriptions.push(
+    documentChangeListener,
+    chatCommandListener,
+    inlineChatListener,
+  );
 
   context.subscriptions.push(
     showDetailsCommand,
