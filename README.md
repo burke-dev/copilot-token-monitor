@@ -1,5 +1,8 @@
 # Copilot Token Monitor
 
+[![Version](https://img.shields.io/badge/version-0.0.1-blue.svg)](https://github.com/burke-dev/copilot-token-monitor)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 A Visual Studio Code extension that tracks GitHub Copilot token usage in a 2-hour rolling window with a visual status bar indicator to help you avoid rate limiting.
 
 ## Features
@@ -138,15 +141,42 @@ npm test
 3. Set breakpoints in the source code
 4. Use the Command Palette to trigger commands
 
+## Versioning
+
+This project uses [Semantic Versioning](https://semver.org/) and [Conventional Commits](https://www.conventionalcommits.org/).
+
+### Release Process
+
+```bash
+# Automatic version bump based on commits
+npm run release
+
+# Force specific version
+npm run release:patch  # Bug fixes
+npm run release:minor  # New features
+npm run release:major  # Breaking changes
+
+# Build extension package
+npm run publish:vsix
+```
+
+See [VERSIONING.md](VERSIONING.md) for detailed guidelines.
+
 ## Known Limitations
 
-- Token usage estimation is approximate and based on telemetry events
-- The Copilot API is evolving; actual rate limits may vary
-- Manual token recording is provided for testing purposes
+- Token usage estimation is approximate and based on observable activity
+- Estimates may vary ±30% from actual usage
+- Best used for tracking trends and avoiding rate limits
+- Cannot access Copilot's internal token counters
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit issues or pull requests.
+Contributions are welcome! Please:
+
+1. Follow [Conventional Commits](https://www.conventionalcommits.org/) format
+2. Write meaningful commit messages
+3. Add tests for new features
+4. Update documentation as needed
 
 ## License
 

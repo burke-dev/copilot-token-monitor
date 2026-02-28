@@ -3,6 +3,11 @@
   "displayName": "Copilot Token Monitor",
   "description": "Track GitHub Copilot token usage with a 2-hour rolling window and visual status bar indicator",
   "version": "0.0.1",
+  "publisher": "burke-dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/burke-dev/copilot-token-monitor.git"
+  },
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -49,9 +54,17 @@
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "release": "standard-version",
+    "release:minor": "standard-version --release-as minor",
+    "release:major": "standard-version --release-as major",
+    "release:patch": "standard-version --release-as patch",
+    "publish:vsix": "npm run package && vsce package",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.4.2",
+    "@commitlint/config-conventional": "^20.4.2",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/vscode": "^1.95.0",
@@ -60,7 +73,9 @@
     "@vscode/vsce": "^3.7.1",
     "esbuild": "^0.27.2",
     "eslint": "^9.39.2",
+    "husky": "^9.1.7",
     "npm-run-all": "^4.1.5",
+    "standard-version": "^9.5.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.54.0"
   }
