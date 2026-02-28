@@ -1,0 +1,66 @@
+{
+  "name": "copilot-token-monitor",
+  "displayName": "Copilot Token Monitor",
+  "description": "Track GitHub Copilot token usage with a 2-hour rolling window and visual status bar indicator",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "copilot-token-monitor.showDetails",
+        "title": "Copilot Token Monitor: Show Details"
+      },
+      {
+        "command": "copilot-token-monitor.recordUsage",
+        "title": "Copilot Token Monitor: Record Usage (Testing)"
+      },
+      {
+        "command": "copilot-token-monitor.clearHistory",
+        "title": "Copilot Token Monitor: Clear History"
+      },
+      {
+        "command": "copilot-token-monitor.showLogs",
+        "title": "Copilot Token Monitor: Show Logs"
+      },
+      {
+        "command": "copilot-token-monitor.exportLogs",
+        "title": "Copilot Token Monitor: Export Logs"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/vscode": "^1.95.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.27.2",
+    "eslint": "^9.39.2",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.54.0"
+  }
+}
