@@ -84,6 +84,7 @@ export function activate(context: vscode.ExtensionContext) {
         "Copilot Token Usage",
         vscode.ViewColumn.Beside,
         {
+          enableCommandUris: true,
           enableFindWidget: true,
         },
       );
@@ -298,6 +299,7 @@ function buildDetailsHtml(
     : "Calibration: Not run yet";
 
   const detailsText = `Copilot Token Usage (2-Hour Window)\n\nTotal Tokens: ${metrics.totalTokens.toLocaleString()}\nRequest Count: ${metrics.requestCount}\nAvg Tokens/Min: ${metrics.avgTokensPerMinute.toFixed(1)}\nUsage Level: ${(metrics.usageLevel * 100).toFixed(0)}%\nStatus: ${metrics.status.toUpperCase()}\n\n${calibrationDetails}\n\n${getUsageTip(metrics.status)}`;
+  const actionHtml = `<a class="btn" href="command:copilot-token-monitor.startDiagnostics">Start Calibration</a>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -322,10 +324,25 @@ function buildDetailsHtml(
         font-size: 18px;
         margin: 0 0 12px 0;
       }
+      .actions {
+        margin: 16px 0;
+      }
+      .btn {
+        display: inline-block;
+        padding: 6px 12px;
+        background: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+        text-decoration: none;
+        border-radius: 4px;
+      }
+      .btn:hover {
+        background: var(--vscode-button-hoverBackground);
+      }
     </style>
   </head>
   <body>
     <h1>Copilot Token Usage</h1>
+    <div class="actions">${actionHtml}</div>
     <pre>${detailsText.replace(/</g, "&lt;")}</pre>
   </body>
 </html>`;

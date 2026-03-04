@@ -28,12 +28,15 @@ export class StatusBarManager {
 
     this.diagnosticsButton = vscode.window.createStatusBarItem(
       "copilotTokenMonitorDiagnostics",
-      vscode.StatusBarAlignment.Left,
-      1,
+      vscode.StatusBarAlignment.Right,
+      101,
     );
     this.diagnosticsButton.text = "$(beaker) Calibrate";
     this.diagnosticsButton.tooltip = "Start diagnostic calibration";
     this.diagnosticsButton.command = "copilot-token-monitor.startDiagnostics";
+    this.diagnosticsButton.backgroundColor = new vscode.ThemeColor(
+      "statusBarItem.warningBackground",
+    );
     this.context.subscriptions.push(this.diagnosticsButton);
 
     this.update();
@@ -214,10 +217,16 @@ export class StatusBarManager {
       this.diagnosticsButton.text = "$(beaker) Calibrating";
       this.diagnosticsButton.tooltip = "Stop diagnostic calibration";
       this.diagnosticsButton.command = "copilot-token-monitor.stopDiagnostics";
+      this.diagnosticsButton.backgroundColor = new vscode.ThemeColor(
+        "statusBarItem.errorBackground",
+      );
     } else {
       this.diagnosticsButton.text = "$(beaker) Calibrate";
       this.diagnosticsButton.tooltip = "Start diagnostic calibration";
       this.diagnosticsButton.command = "copilot-token-monitor.startDiagnostics";
+      this.diagnosticsButton.backgroundColor = new vscode.ThemeColor(
+        "statusBarItem.warningBackground",
+      );
     }
   }
 
