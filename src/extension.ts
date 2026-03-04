@@ -15,9 +15,11 @@ let tokenEstimator: TokenEstimator;
 let diagnosticModeManager: DiagnosticModeManager;
 const calibrationKey = "copilotTokenMonitor.calibrationMultiplier";
 const calibrationSummaryKey = "copilotTokenMonitor.calibrationSummary";
+const calibrationLastRunKey = "copilotTokenMonitor.calibrationLastRun";
 let detailsDialogOpen = false;
 let calibrationSummary: DiagnosticCalibrationResult | undefined;
 let detailsPanel: vscode.WebviewPanel | undefined;
+let calibrationLastRun: number | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
   console.log("Copilot Token Monitor is now active!");
@@ -36,12 +38,14 @@ export function activate(context: vscode.ExtensionContext) {
   calibrationSummary = context.globalState.get<DiagnosticCalibrationResult>(
     calibrationSummaryKey,
   );
+  calibrationLastRun = context.globalState.get<number>(calibrationLastRunKey);
 
   // Initialize token tracker
   tokenTracker = new TokenTracker(context, logger);
 
   // Initialize status bar manager
   statusBarManager = new StatusBarManager(tokenTracker, context);
+  statusBarManager.setCalibrationLastRun(calibrationLastRun);
 
   // Initialize diagnostic mode manager
   diagnosticModeManager = new DiagnosticModeManager(
@@ -56,6 +60,12 @@ export function activate(context: vscode.ExtensionContext) {
       }
       calibrationSummary = calibration;
       await context.globalState.update(calibrationSummaryKey, calibration);
+      calibrationLastRun = Date.now();
+      await context.globalState.update(
+        calibrationLastRunKey,
+        calibrationLastRun,
+      );
+      statusBarManager.setCalibrationLastRun(calibrationLastRun);
     },
   );
   statusBarManager.setDiagnosticStatus(diagnosticModeManager.getStatus());
@@ -166,6 +176,22 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
+  const showCalibrationInfoCommand = vscode.commands.registerCommand(
+    "copilot-token-monitor.showCalibrationInfo",
+    async () => {
+      const message =
+        "Calibration runs a short diagnostic sequence to measure token traffic and tune local estimates. This helps keep monitoring accurate.";
+      const action = await vscode.window.showInformationMessage(
+        message,
+        "Start Calibration",
+        "Cancel",
+      );
+      if (action === "Start Calibration") {
+        await diagnosticModeManager.start();
+      }
+    },
+  );
+
   // Register command to show logs
   const showLogsCommand = vscode.commands.registerCommand(
     "copilot-token-monitor.showLogs",
@@ -268,6 +294,7 @@ export function activate(context: vscode.ExtensionContext) {
     clearHistoryCommand,
     startDiagnosticsCommand,
     stopDiagnosticsCommand,
+    showCalibrationInfoCommand,
     showLogsCommand,
     exportLogsCommand,
   );

@@ -42,6 +42,10 @@
         "title": "Copilot Token Monitor: Stop Diagnostics"
       },
       {
+        "command": "copilot-token-monitor.showCalibrationInfo",
+        "title": "Copilot Token Monitor: Calibration Info"
+      },
+      {
         "command": "copilot-token-monitor.showLogs",
         "title": "Copilot Token Monitor: Show Logs"
       },

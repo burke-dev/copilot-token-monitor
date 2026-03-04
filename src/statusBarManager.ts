@@ -11,6 +11,8 @@ export class StatusBarManager {
   private statusBarItem: vscode.StatusBarItem;
   private diagnosticsButton: vscode.StatusBarItem;
   private updateInterval: NodeJS.Timeout | undefined;
+  private calibrationLastRun: number | undefined;
+  private readonly CALIBRATION_STALE_MS = 28 * 24 * 60 * 60 * 1000;
 
   constructor(
     private tokenTracker: TokenTracker,
@@ -31,12 +33,11 @@ export class StatusBarManager {
       vscode.StatusBarAlignment.Right,
       101,
     );
-    this.diagnosticsButton.text = "$(beaker) Calibrate";
-    this.diagnosticsButton.tooltip = "Start diagnostic calibration";
-    this.diagnosticsButton.command = "copilot-token-monitor.startDiagnostics";
-    this.diagnosticsButton.backgroundColor = new vscode.ThemeColor(
-      "statusBarItem.warningBackground",
-    );
+    this.diagnosticsButton.text = "$(beaker)";
+    this.diagnosticsButton.tooltip =
+      "Calibration runs a short diagnostic sequence to tune token estimates.";
+    this.diagnosticsButton.command =
+      "copilot-token-monitor.showCalibrationInfo";
     this.context.subscriptions.push(this.diagnosticsButton);
 
     this.update();
@@ -214,20 +215,39 @@ export class StatusBarManager {
 
   private updateDiagnosticsButton(isActive: boolean): void {
     if (isActive) {
-      this.diagnosticsButton.text = "$(beaker) Calibrating";
-      this.diagnosticsButton.tooltip = "Stop diagnostic calibration";
+      this.diagnosticsButton.text = "$(beaker)";
+      this.diagnosticsButton.tooltip =
+        "Calibration in progress. Click to stop diagnostics.";
       this.diagnosticsButton.command = "copilot-token-monitor.stopDiagnostics";
       this.diagnosticsButton.backgroundColor = new vscode.ThemeColor(
         "statusBarItem.errorBackground",
       );
     } else {
-      this.diagnosticsButton.text = "$(beaker) Calibrate";
-      this.diagnosticsButton.tooltip = "Start diagnostic calibration";
-      this.diagnosticsButton.command = "copilot-token-monitor.startDiagnostics";
-      this.diagnosticsButton.backgroundColor = new vscode.ThemeColor(
-        "statusBarItem.warningBackground",
-      );
+      this.diagnosticsButton.text = "$(beaker)";
+      this.diagnosticsButton.tooltip =
+        "Calibration runs a short diagnostic sequence to tune token estimates.";
+      this.diagnosticsButton.command =
+        "copilot-token-monitor.showCalibrationInfo";
+      this.diagnosticsButton.backgroundColor = this.getCalibrationColor();
     }
+  }
+
+  public setCalibrationLastRun(timestamp?: number): void {
+    this.calibrationLastRun = timestamp;
+    this.update();
+  }
+
+  private getCalibrationColor(): vscode.ThemeColor {
+    if (!this.calibrationLastRun) {
+      return new vscode.ThemeColor("statusBarItem.warningBackground");
+    }
+
+    const age = Date.now() - this.calibrationLastRun;
+    if (age > this.CALIBRATION_STALE_MS) {
+      return new vscode.ThemeColor("statusBarItem.warningBackground");
+    }
+
+    return new vscode.ThemeColor("statusBarItem.debuggingBackground");
   }
 
   private createDiagnosticProgress(): string {
