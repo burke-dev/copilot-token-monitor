@@ -2,8 +2,9 @@
   "name": "copilot-token-monitor",
   "displayName": "Copilot Token Monitor",
   "description": "Track GitHub Copilot token usage with a 2-hour rolling window and visual status bar indicator",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "burke-dev",
+  "icon": "assets/icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/burke-dev/copilot-token-monitor.git"
