@@ -33,6 +33,14 @@
         "title": "Copilot Token Monitor: Clear History"
       },
       {
+        "command": "copilot-token-monitor.startDiagnostics",
+        "title": "Copilot Token Monitor: Start Diagnostics"
+      },
+      {
+        "command": "copilot-token-monitor.stopDiagnostics",
+        "title": "Copilot Token Monitor: Stop Diagnostics"
+      },
+      {
         "command": "copilot-token-monitor.showLogs",
         "title": "Copilot Token Monitor: Show Logs"
       },
@@ -40,7 +48,17 @@
         "command": "copilot-token-monitor.exportLogs",
         "title": "Copilot Token Monitor: Export Logs"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Copilot Token Monitor",
+      "properties": {
+        "copilotTokenMonitor.showDiagnosticsInChat": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show diagnostic traffic in the Copilot Token Monitor output channel during calibration runs."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

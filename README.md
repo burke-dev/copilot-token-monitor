@@ -37,6 +37,12 @@ Access these commands via the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`):
 - **Copilot Token Monitor: Show Details** - Display detailed usage metrics
 - **Copilot Token Monitor: Record Usage (Testing)** - Manually add token usage for testing
 - **Copilot Token Monitor: Clear History** - Reset all usage history
+- **Copilot Token Monitor: Start Diagnostics** - Run calibration tests to validate token traffic estimates
+- **Copilot Token Monitor: Stop Diagnostics** - Abort a running diagnostic session
+
+### Settings
+
+- **copilotTokenMonitor.showDiagnosticsInChat** (default: true) - Stream diagnostic traffic to the output panel during calibration runs.
 
 ## Installation
 

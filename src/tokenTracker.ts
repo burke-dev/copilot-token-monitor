@@ -11,6 +11,8 @@ export class TokenTracker {
   private readonly TWO_HOURS_MS = 2 * 60 * 60 * 1000;
   private usageHistory: TokenUsageEntry[] = [];
   private readonly storageKey = "copilotTokenUsageHistory";
+  private diagnosticHistory: TokenUsageEntry[] = [];
+  private readonly diagnosticStorageKey = "copilotDiagnosticUsageHistory";
   private lastRateLimitWarning: number = 0;
   private readonly RATE_LIMIT_WARNING_COOLDOWN = 5 * 60 * 1000; // 5 minutes between warnings
 
@@ -19,6 +21,7 @@ export class TokenTracker {
     private logger: Logger,
   ) {
     this.loadHistory();
+    this.loadDiagnosticHistory();
     this.startCleanupTimer();
     this.logger.info("TokenTracker initialized");
   }
@@ -36,11 +39,28 @@ export class TokenTracker {
     }
   }
 
+  private async loadDiagnosticHistory(): Promise<void> {
+    const stored = this.context.globalState.get<TokenUsageEntry[]>(
+      this.diagnosticStorageKey,
+    );
+    if (stored) {
+      this.diagnosticHistory = stored;
+      this.cleanOldEntries();
+    }
+  }
+
   /**
    * Save token usage history to persistent storage
    */
   private async saveHistory(): Promise<void> {
     await this.context.globalState.update(this.storageKey, this.usageHistory);
+  }
+
+  private async saveDiagnosticHistory(): Promise<void> {
+    await this.context.globalState.update(
+      this.diagnosticStorageKey,
+      this.diagnosticHistory,
+    );
   }
 
   /**
@@ -72,12 +92,36 @@ export class TokenTracker {
     this.checkForRateLimit();
   }
 
+  public async recordDiagnosticUsage(
+    tokens: number,
+    requestId: string = "",
+  ): Promise<void> {
+    const entry: TokenUsageEntry = {
+      timestamp: Date.now(),
+      tokens,
+      requestId,
+    };
+
+    this.diagnosticHistory.push(entry);
+    this.cleanOldEntries();
+    await this.saveDiagnosticHistory();
+
+    this.logger.info("Diagnostic token usage recorded", {
+      tokens,
+      requestId,
+      totalDiagnosticTokens: this.getDiagnosticTotalTokens(),
+    });
+  }
+
   /**
    * Remove entries older than 2 hours
    */
   private cleanOldEntries(): void {
     const cutoff = Date.now() - this.TWO_HOURS_MS;
     this.usageHistory = this.usageHistory.filter(
+      (entry) => entry.timestamp >= cutoff,
+    );
+    this.diagnosticHistory = this.diagnosticHistory.filter(
       (entry) => entry.timestamp >= cutoff,
     );
   }
@@ -100,6 +144,24 @@ export class TokenTracker {
    */
   public getTotalTokens(): number {
     return this.usageHistory.reduce((sum, entry) => sum + entry.tokens, 0);
+  }
+
+  public getDiagnosticTotalTokens(): number {
+    return this.diagnosticHistory.reduce((sum, entry) => sum + entry.tokens, 0);
+  }
+
+  public getDiagnosticTotalsSince(sinceTimestamp: number): {
+    totalTokens: number;
+    requestCount: number;
+  } {
+    const entries = this.diagnosticHistory.filter(
+      (entry) => entry.timestamp >= sinceTimestamp,
+    );
+
+    return {
+      totalTokens: entries.reduce((sum, entry) => sum + entry.tokens, 0),
+      requestCount: entries.length,
+    };
   }
 
   /**
@@ -179,6 +241,12 @@ export class TokenTracker {
     this.usageHistory = [];
     await this.saveHistory();
     this.logger.info("Usage history cleared");
+  }
+
+  public async clearDiagnosticHistory(): Promise<void> {
+    this.diagnosticHistory = [];
+    await this.saveDiagnosticHistory();
+    this.logger.info("Diagnostic usage history cleared");
   }
 
   /**

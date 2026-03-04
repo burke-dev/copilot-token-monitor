@@ -14,8 +14,16 @@ export class TokenEstimator {
     length: number;
     type: string;
   }> = [];
+  private calibrationMultiplier = 1;
 
-  constructor(private logger: Logger) { }
+  constructor(private logger: Logger) {}
+
+  public setCalibrationMultiplier(multiplier: number): void {
+    if (Number.isFinite(multiplier) && multiplier > 0) {
+      this.calibrationMultiplier = multiplier;
+      this.logger.info("Calibration multiplier updated", { multiplier });
+    }
+  }
 
   /**
    * Estimate tokens from a text change event
@@ -23,7 +31,11 @@ export class TokenEstimator {
    */
   estimateFromTextChange(
     event: vscode.TextDocumentChangeEvent,
-  ): { tokens: number; confidence: "high" | "medium" | "low"; type: string } | null {
+  ): {
+    tokens: number;
+    confidence: "high" | "medium" | "low";
+    type: string;
+  } | null {
     // Ignore changes in output channels, terminals, etc.
     if (
       event.document.uri.scheme !== "file" &&
@@ -109,17 +121,20 @@ export class TokenEstimator {
     const contextTokens = this.estimateContextTokens(event.document);
     tokens += contextTokens;
 
+    const calibratedTokens = this.applyCalibration(tokens);
+
     this.logger.info("Estimated token usage", {
       type,
-      outputTokens: tokens - contextTokens,
+      outputTokens: calibratedTokens - contextTokens,
       contextTokens,
-      totalTokens: tokens,
+      totalTokens: calibratedTokens,
       confidence,
       textLength: totalTextAdded,
       language: event.document.languageId,
+      calibrationMultiplier: this.calibrationMultiplier,
     });
 
-    return { tokens, confidence, type };
+    return { tokens: calibratedTokens, confidence, type };
   }
 
   /**
@@ -147,7 +162,9 @@ export class TokenEstimator {
 
     // Approximate: words + symbols, with adjustment
     const estimatedTokens = Math.ceil(
-      words.length * 0.75 + symbols * 0.5 + text.length / charsPerToken * 0.25,
+      words.length * 0.75 +
+        symbols * 0.5 +
+        (text.length / charsPerToken) * 0.25,
     );
 
     return Math.max(1, estimatedTokens);
@@ -201,24 +218,28 @@ export class TokenEstimator {
     // Typical response is 1-3x the prompt length
     const estimatedOutputTokens = Math.ceil(promptTokens * 1.5);
 
+    const calibratedInput = this.applyCalibration(inputTokens);
+    const calibratedOutput = this.applyCalibration(estimatedOutputTokens);
+
     this.logger.info("Estimated chat token usage", {
       promptTokens,
       contextTokens,
-      inputTokens,
-      estimatedOutputTokens,
-      totalEstimate: inputTokens + estimatedOutputTokens,
+      inputTokens: calibratedInput,
+      estimatedOutputTokens: calibratedOutput,
+      totalEstimate: calibratedInput + calibratedOutput,
+      calibrationMultiplier: this.calibrationMultiplier,
     });
 
-    return { inputTokens, estimatedOutputTokens };
+    return {
+      inputTokens: calibratedInput,
+      estimatedOutputTokens: calibratedOutput,
+    };
   }
 
   /**
    * Estimate tokens for inline chat (Cmd+I)
    */
-  estimateInlineChatTokens(
-    prompt: string,
-    selectionLength: number,
-  ): number {
+  estimateInlineChatTokens(prompt: string, selectionLength: number): number {
     const promptTokens = this.countTokens(prompt, "markdown");
     const selectionTokens = Math.ceil(selectionLength / 4);
 
@@ -227,16 +248,22 @@ export class TokenEstimator {
     const outputTokens = Math.max(selectionTokens * 0.5, promptTokens * 1.5);
 
     const total = Math.ceil(inputTokens + outputTokens);
+    const calibratedTotal = this.applyCalibration(total);
 
     this.logger.info("Estimated inline chat token usage", {
       promptTokens,
       selectionTokens,
       inputTokens,
       outputTokens,
-      total,
+      total: calibratedTotal,
+      calibrationMultiplier: this.calibrationMultiplier,
     });
 
-    return total;
+    return calibratedTotal;
+  }
+
+  private applyCalibration(tokens: number): number {
+    return Math.max(1, Math.round(tokens * this.calibrationMultiplier));
   }
 
   /**

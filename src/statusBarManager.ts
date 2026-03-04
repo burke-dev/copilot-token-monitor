@@ -1,8 +1,15 @@
 import * as vscode from "vscode";
 import { TokenTracker } from "./tokenTracker";
 
+export interface DiagnosticStatus {
+  active: boolean;
+  currentTest: number;
+  totalTests: number;
+  currentAttempt: number;
+}
 export class StatusBarManager {
   private statusBarItem: vscode.StatusBarItem;
+  private diagnosticsButton: vscode.StatusBarItem;
   private updateInterval: NodeJS.Timeout | undefined;
 
   constructor(
@@ -19,8 +26,19 @@ export class StatusBarManager {
     this.statusBarItem.command = "copilot-token-monitor.showDetails";
     this.context.subscriptions.push(this.statusBarItem);
 
+    this.diagnosticsButton = vscode.window.createStatusBarItem(
+      "copilotTokenMonitorDiagnostics",
+      vscode.StatusBarAlignment.Left,
+      1,
+    );
+    this.diagnosticsButton.text = "$(beaker) Calibrate";
+    this.diagnosticsButton.tooltip = "Start diagnostic calibration";
+    this.diagnosticsButton.command = "copilot-token-monitor.startDiagnostics";
+    this.context.subscriptions.push(this.diagnosticsButton);
+
     this.update();
     this.statusBarItem.show();
+    this.diagnosticsButton.show();
 
     // Update every 10 seconds
     this.startUpdateTimer();
@@ -31,6 +49,14 @@ export class StatusBarManager {
    */
   public update(): void {
     const metrics = this.tokenTracker.getMetrics();
+
+    if (this.diagnosticStatus?.active) {
+      this.updateDiagnostic(metrics);
+      this.updateDiagnosticsButton(true);
+      return;
+    }
+
+    this.updateDiagnosticsButton(false);
 
     // Create progress bar visualization
     const progressBar = this.createProgressBar(metrics.usageLevel);
@@ -158,5 +184,84 @@ export class StatusBarManager {
       clearInterval(this.updateInterval);
     }
     this.statusBarItem.dispose();
+    this.diagnosticsButton.dispose();
+  }
+
+  private diagnosticStatus: DiagnosticStatus | undefined;
+
+  public setDiagnosticStatus(status: DiagnosticStatus): void {
+    this.diagnosticStatus = status;
+    this.update();
+  }
+
+  private updateDiagnostic(metrics: {
+    totalTokens: number;
+    requestCount: number;
+    avgTokensPerMinute: number;
+    usageLevel: number;
+    status: "low" | "medium" | "high";
+  }): void {
+    const progress = this.createDiagnosticProgress();
+    this.statusBarItem.text = `$(beaker) DIAG ${progress}`;
+    this.statusBarItem.tooltip = this.createDiagnosticTooltip(metrics);
+    this.statusBarItem.backgroundColor = new vscode.ThemeColor(
+      "statusBarItem.warningBackground",
+    );
+  }
+
+  private updateDiagnosticsButton(isActive: boolean): void {
+    if (isActive) {
+      this.diagnosticsButton.text = "$(beaker) Calibrating";
+      this.diagnosticsButton.tooltip = "Stop diagnostic calibration";
+      this.diagnosticsButton.command = "copilot-token-monitor.stopDiagnostics";
+    } else {
+      this.diagnosticsButton.text = "$(beaker) Calibrate";
+      this.diagnosticsButton.tooltip = "Start diagnostic calibration";
+      this.diagnosticsButton.command = "copilot-token-monitor.startDiagnostics";
+    }
+  }
+
+  private createDiagnosticProgress(): string {
+    if (!this.diagnosticStatus) {
+      return "0/0";
+    }
+    return `${this.diagnosticStatus.currentTest}/${this.diagnosticStatus.totalTests}`;
+  }
+
+  private createDiagnosticTooltip(metrics: {
+    totalTokens: number;
+    requestCount: number;
+    avgTokensPerMinute: number;
+    usageLevel: number;
+    status: "low" | "medium" | "high";
+  }): vscode.MarkdownString {
+    const tooltip = new vscode.MarkdownString();
+    tooltip.isTrusted = true;
+
+    tooltip.appendMarkdown(`### Copilot Token Monitor - Diagnostic Mode\n\n`);
+    tooltip.appendMarkdown(
+      `**Test:** ${this.diagnosticStatus?.currentTest}/${this.diagnosticStatus?.totalTests} (Attempt ${this.diagnosticStatus?.currentAttempt})\n\n`,
+    );
+    tooltip.appendMarkdown(`**Status:** Calibration in progress\n\n`);
+    tooltip.appendMarkdown(
+      `Prompts are temporarily blocked during diagnostics.\n`,
+    );
+    tooltip.appendMarkdown(
+      `Use **Copilot Token Monitor: Stop Diagnostics** to halt the run.\n\n`,
+    );
+    tooltip.appendMarkdown(`---\n`);
+    tooltip.appendMarkdown(`**Current Usage Snapshot:**\n`);
+    tooltip.appendMarkdown(
+      `- Total Tokens: ${metrics.totalTokens.toLocaleString()}\n`,
+    );
+    tooltip.appendMarkdown(`- Request Count: ${metrics.requestCount}\n`);
+    tooltip.appendMarkdown(
+      `- Avg Tokens/Min: ${metrics.avgTokensPerMinute.toFixed(1)}\n`,
+    );
+    tooltip.appendMarkdown(
+      `- Usage Level: ${(metrics.usageLevel * 100).toFixed(0)}%\n`,
+    );
+
+    return tooltip;
   }
 }

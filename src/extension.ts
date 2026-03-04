@@ -3,11 +3,21 @@ import { TokenTracker } from "./tokenTracker";
 import { StatusBarManager } from "./statusBarManager";
 import { Logger } from "./logger";
 import { TokenEstimator } from "./tokenEstimator";
+import {
+  DiagnosticModeManager,
+  DiagnosticCalibrationResult,
+} from "./diagnosticMode";
 
 let tokenTracker: TokenTracker;
 let statusBarManager: StatusBarManager;
 let logger: Logger;
 let tokenEstimator: TokenEstimator;
+let diagnosticModeManager: DiagnosticModeManager;
+const calibrationKey = "copilotTokenMonitor.calibrationMultiplier";
+const calibrationSummaryKey = "copilotTokenMonitor.calibrationSummary";
+let detailsDialogOpen = false;
+let calibrationSummary: DiagnosticCalibrationResult | undefined;
+let detailsPanel: vscode.WebviewPanel | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
   console.log("Copilot Token Monitor is now active!");
@@ -19,6 +29,13 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Initialize token estimator
   tokenEstimator = new TokenEstimator(logger);
+  const storedCalibration = context.globalState.get<number>(calibrationKey);
+  if (typeof storedCalibration === "number" && storedCalibration > 0) {
+    tokenEstimator.setCalibrationMultiplier(storedCalibration);
+  }
+  calibrationSummary = context.globalState.get<DiagnosticCalibrationResult>(
+    calibrationSummaryKey,
+  );
 
   // Initialize token tracker
   tokenTracker = new TokenTracker(context, logger);
@@ -26,24 +43,63 @@ export function activate(context: vscode.ExtensionContext) {
   // Initialize status bar manager
   statusBarManager = new StatusBarManager(tokenTracker, context);
 
+  // Initialize diagnostic mode manager
+  diagnosticModeManager = new DiagnosticModeManager(
+    tokenTracker,
+    logger,
+    (status) => statusBarManager.setDiagnosticStatus(status),
+    undefined,
+    async (calibration) => {
+      if (Number.isFinite(calibration.scale) && calibration.scale > 0) {
+        await context.globalState.update(calibrationKey, calibration.scale);
+        tokenEstimator.setCalibrationMultiplier(calibration.scale);
+      }
+      calibrationSummary = calibration;
+      await context.globalState.update(calibrationSummaryKey, calibration);
+    },
+  );
+  statusBarManager.setDiagnosticStatus(diagnosticModeManager.getStatus());
+
   // Register command to show detailed metrics
   const showDetailsCommand = vscode.commands.registerCommand(
     "copilot-token-monitor.showDetails",
-    () => {
+    async () => {
+      if (detailsPanel) {
+        detailsPanel.reveal();
+        detailsPanel.webview.html = buildDetailsHtml(
+          tokenTracker.getMetrics(),
+          calibrationSummary,
+        );
+        return;
+      }
+
+      if (detailsDialogOpen) {
+        return;
+      }
+
+      detailsDialogOpen = true;
       const metrics = tokenTracker.getMetrics();
-      const message = `
-**Copilot Token Usage (2-Hour Window)**
-
-Total Tokens: ${metrics.totalTokens.toLocaleString()}
-Request Count: ${metrics.requestCount}
-Avg Tokens/Min: ${metrics.avgTokensPerMinute.toFixed(1)}
-Usage Level: ${(metrics.usageLevel * 100).toFixed(0)}%
-Status: ${metrics.status.toUpperCase()}
-
-${getUsageTip(metrics.status)}
-			`.trim();
-
-      vscode.window.showInformationMessage(message, { modal: false });
+      detailsPanel = vscode.window.createWebviewPanel(
+        "copilotTokenMonitor.details",
+        "Copilot Token Usage",
+        vscode.ViewColumn.Beside,
+        {
+          enableFindWidget: true,
+        },
+      );
+      detailsPanel.webview.html = buildDetailsHtml(metrics, calibrationSummary);
+      detailsPanel.onDidDispose(() => {
+        detailsPanel = undefined;
+      });
+      detailsPanel.onDidChangeViewState(() => {
+        if (detailsPanel) {
+          detailsPanel.webview.html = buildDetailsHtml(
+            tokenTracker.getMetrics(),
+            calibrationSummary,
+          );
+        }
+      });
+      detailsDialogOpen = false;
     },
   );
 
@@ -86,6 +142,26 @@ ${getUsageTip(metrics.status)}
         statusBarManager.update();
         vscode.window.showInformationMessage("Token usage history cleared");
       }
+    },
+  );
+
+  const startDiagnosticsCommand = vscode.commands.registerCommand(
+    "copilot-token-monitor.startDiagnostics",
+    async () => {
+      const settings = vscode.workspace.getConfiguration("copilotTokenMonitor");
+      const showDiagnosticsInChat = settings.get<boolean>(
+        "showDiagnosticsInChat",
+        true,
+      );
+      diagnosticModeManager.updateConfig({ showDiagnosticsInChat });
+      await diagnosticModeManager.start();
+    },
+  );
+
+  const stopDiagnosticsCommand = vscode.commands.registerCommand(
+    "copilot-token-monitor.stopDiagnostics",
+    async () => {
+      await diagnosticModeManager.stop();
     },
   );
 
@@ -140,6 +216,12 @@ ${getUsageTip(metrics.status)}
   const chatCommandListener = vscode.commands.registerCommand(
     "workbench.action.chat.open",
     async () => {
+      if (diagnosticModeManager.isActive()) {
+        vscode.window.showWarningMessage(
+          "Diagnostic mode is active. Prompts are blocked until diagnostics complete.",
+        );
+        return;
+      }
       // User opened chat - estimate baseline tokens
       await tokenTracker.recordUsage(100, "chat:opened");
       statusBarManager.update();
@@ -151,6 +233,12 @@ ${getUsageTip(metrics.status)}
   const inlineChatListener = vscode.commands.registerCommand(
     "inlineChat.start",
     async () => {
+      if (diagnosticModeManager.isActive()) {
+        vscode.window.showWarningMessage(
+          "Diagnostic mode is active. Prompts are blocked until diagnostics complete.",
+        );
+        return;
+      }
       const editor = vscode.window.activeTextEditor;
       if (editor) {
         const selection = editor.selection;
@@ -177,6 +265,8 @@ ${getUsageTip(metrics.status)}
     showDetailsCommand,
     recordUsageCommand,
     clearHistoryCommand,
+    startDiagnosticsCommand,
+    stopDiagnosticsCommand,
     showLogsCommand,
     exportLogsCommand,
   );
@@ -191,6 +281,54 @@ function getUsageTip(status: "low" | "medium" | "high"): string {
     case "high":
       return "⚠ High usage detected! You may hit rate limits soon. Consider waiting before making more requests.";
   }
+}
+
+function buildDetailsHtml(
+  metrics: {
+    totalTokens: number;
+    requestCount: number;
+    avgTokensPerMinute: number;
+    usageLevel: number;
+    status: "low" | "medium" | "high";
+  },
+  summary?: DiagnosticCalibrationResult,
+): string {
+  const calibrationDetails = summary
+    ? `Calibration Scale: ${summary.scale.toFixed(2)}\nAverage Expected: ${summary.averageExpected.toFixed(2)}\nAverage Observed: ${summary.averageObserved.toFixed(2)}\nSamples: ${summary.samples}`
+    : "Calibration: Not run yet";
+
+  const detailsText = `Copilot Token Usage (2-Hour Window)\n\nTotal Tokens: ${metrics.totalTokens.toLocaleString()}\nRequest Count: ${metrics.requestCount}\nAvg Tokens/Min: ${metrics.avgTokensPerMinute.toFixed(1)}\nUsage Level: ${(metrics.usageLevel * 100).toFixed(0)}%\nStatus: ${metrics.status.toUpperCase()}\n\n${calibrationDetails}\n\n${getUsageTip(metrics.status)}`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Copilot Token Usage</title>
+    <style>
+      body {
+        font-family: var(--vscode-font-family);
+        color: var(--vscode-foreground);
+        padding: 16px;
+      }
+      pre {
+        background: var(--vscode-editor-background);
+        border: 1px solid var(--vscode-editorWidget-border);
+        border-radius: 6px;
+        padding: 12px;
+        white-space: pre-wrap;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 12px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Copilot Token Usage</h1>
+    <pre>${detailsText.replace(/</g, "&lt;")}</pre>
+  </body>
+</html>`;
 }
 
 export function deactivate() {
